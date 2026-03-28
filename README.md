@@ -1,0 +1,2 @@
+# UserDictionaryUtil
+Macでユーザー辞書を管理してiPhoneで楽したいから考えてみた
