@@ -104,6 +104,7 @@ function App() {
   const [bulkGoogleMode, setBulkGoogleMode] = useState<BulkFlagMode>('keep');
   const [activeDuplicateGroup, setActiveDuplicateGroup] = useState<DuplicateGroup | null>(null);
   const [keepDuplicateId, setKeepDuplicateId] = useState<string>('');
+  const [confirmAction, setConfirmAction] = useState<{ label: string; detail: string; onConfirm: () => void } | null>(null);
 
   async function refreshBackups() {
     const snapshotList = await window.udu.listBackups();
@@ -398,14 +399,20 @@ function App() {
     }
 
     const deleteCount = selectedIds.length;
-    const next = entries.filter((entry) => !selectedIds.includes(entry.id));
-    const saved = await window.udu.saveAllEntries(next);
-    setEntries(saved);
-    setSelectedIds([]);
-    setHasUnsavedChanges(false);
-    await refreshBackups();
-    setStatus(`${deleteCount} 件削除しました。`);
-    pushActivity(`${deleteCount} 件まとめて削除しました。`, 'warn');
+    setConfirmAction({
+      label: `選択中 ${deleteCount} 件を削除`,
+      detail: `${deleteCount} 件のエントリを削除します。この操作は保存後に復元ポイントからのみ戻せます。`,
+      onConfirm: async () => {
+        const next = entries.filter((entry) => !selectedIds.includes(entry.id));
+        const saved = await window.udu.saveAllEntries(next);
+        setEntries(saved);
+        setSelectedIds([]);
+        setHasUnsavedChanges(false);
+        await refreshBackups();
+        setStatus(`${deleteCount} 件削除しました。`);
+        pushActivity(`${deleteCount} 件まとめて削除しました。`, 'warn');
+      }
+    });
   }
 
   function toggleSelected(id: string) {
@@ -490,13 +497,19 @@ function App() {
       sortedGroup.slice(1).forEach((entry) => removeIds.add(entry.id));
     }
 
-    const nextEntries = entries.filter((entry) => !removeIds.has(entry.id));
-    setEntries(nextEntries);
-    setSelectedIds((prev) => prev.filter((id) => !removeIds.has(id)));
-    setHasUnsavedChanges(true);
-    const message = `${duplicateGroups.length} 組の重複候補を整理し、${removeIds.size} 件を一覧上から外しました。保存すると確定します。`;
-    setStatus(message);
-    pushActivity(message, 'warn');
+    setConfirmAction({
+      label: `重複候補 ${duplicateGroups.length} 組を一括整理`,
+      detail: `各グループで最新更新の1件を残し、${removeIds.size} 件を一覧上から除去します。保存で確定します。`,
+      onConfirm: () => {
+        const nextEntries = entries.filter((entry) => !removeIds.has(entry.id));
+        setEntries(nextEntries);
+        setSelectedIds((prev) => prev.filter((id) => !removeIds.has(id)));
+        setHasUnsavedChanges(true);
+        const message = `${duplicateGroups.length} 組の重複候補を整理し、${removeIds.size} 件を一覧上から外しました。保存すると確定します。`;
+        setStatus(message);
+        pushActivity(message, 'warn');
+      }
+    });
   }
 
   async function restoreBackup(snapshotId: string) {
@@ -787,28 +800,68 @@ function App() {
               </div>
 
               <div className="bulkGroup">
-                <strong>選択中の {stats.selected} 件</strong>
+                <strong>選択中の {stats.selected} 件 / 表示中の {stats.visible} 件</strong>
                 <div className="bulkButtons">
-                  <button onClick={() => applyBulkToggle('selected', 'enabledApple', true)}>Apple ON</button>
-                  <button onClick={() => applyBulkToggle('selected', 'enabledApple', false)}>Apple OFF</button>
-                  <button onClick={() => applyBulkToggle('selected', 'enabledGoogle', true)}>Google ON</button>
-                  <button onClick={() => applyBulkToggle('selected', 'enabledGoogle', false)}>Google OFF</button>
+                  <button onClick={() => applyBulkToggle('selected', 'enabledApple', true)}>選択 Apple ON</button>
+                  <button onClick={() => applyBulkToggle('selected', 'enabledApple', false)}>選択 Apple OFF</button>
+                  <button onClick={() => applyBulkToggle('selected', 'enabledGoogle', true)}>選択 Google ON</button>
+                  <button onClick={() => applyBulkToggle('selected', 'enabledGoogle', false)}>選択 Google OFF</button>
+                  <button onClick={() => applyBulkToggle('visible', 'enabledApple', true)}>表示 Apple ON</button>
+                  <button onClick={() => applyBulkToggle('visible', 'enabledApple', false)}>表示 Apple OFF</button>
+                  <button onClick={() => applyBulkToggle('visible', 'enabledGoogle', true)}>表示 Google ON</button>
+                  <button onClick={() => applyBulkToggle('visible', 'enabledGoogle', false)}>表示 Google OFF</button>
                 </div>
                 <div className="utilityButtons">
                   <button className="ghost" onClick={() => void copyEntriesAsTsv('selected')}>選択をTSVコピー</button>
+                  <button className="ghost" onClick={() => void copyEntriesAsTsv('visible')}>表示中をTSVコピー</button>
                 </div>
               </div>
 
               <div className="bulkGroup">
-                <strong>表示中の {stats.visible} 件</strong>
-                <div className="bulkButtons">
-                  <button onClick={() => applyBulkToggle('visible', 'enabledApple', true)}>Apple ON</button>
-                  <button onClick={() => applyBulkToggle('visible', 'enabledApple', false)}>Apple OFF</button>
-                  <button onClick={() => applyBulkToggle('visible', 'enabledGoogle', true)}>Google ON</button>
-                  <button onClick={() => applyBulkToggle('visible', 'enabledGoogle', false)}>Google OFF</button>
+                <strong>一括編集</strong>
+                <p className="bulkEditNote">品詞・メモ・ON/OFF を選択中または表示中にまとめて適用。空欄はスキップ。</p>
+                <div className="bulkEditGrid">
+                  <label className="bulkEditLabel">
+                    <span>品詞（上書き）</span>
+                    <input
+                      value={bulkPosValue}
+                      onChange={(e) => setBulkPosValue(e.target.value)}
+                      placeholder="名詞 / 固有名詞 など（空=変更なし）"
+                    />
+                  </label>
+                  <label className="bulkEditLabel">
+                    <span>メモ 前付け</span>
+                    <input
+                      value={bulkNotePrefix}
+                      onChange={(e) => setBulkNotePrefix(e.target.value)}
+                      placeholder="例: [配信] （空=スキップ）"
+                    />
+                  </label>
+                  <label className="bulkEditLabel">
+                    <span>メモ 後付け</span>
+                    <input
+                      value={bulkNoteSuffix}
+                      onChange={(e) => setBulkNoteSuffix(e.target.value)}
+                      placeholder="例: [要確認] （空=スキップ）"
+                    />
+                  </label>
+                  <div className="bulkFlagRow">
+                    <span>Apple</span>
+                    <label className="radioLabel"><input type="radio" name="bulkApple" checked={bulkAppleMode === 'keep'} onChange={() => setBulkAppleMode('keep')} /> 変更なし</label>
+                    <label className="radioLabel"><input type="radio" name="bulkApple" checked={bulkAppleMode === 'on'} onChange={() => setBulkAppleMode('on')} /> ON</label>
+                    <label className="radioLabel"><input type="radio" name="bulkApple" checked={bulkAppleMode === 'off'} onChange={() => setBulkAppleMode('off')} /> OFF</label>
+                  </div>
+                  <div className="bulkFlagRow">
+                    <span>Google</span>
+                    <label className="radioLabel"><input type="radio" name="bulkGoogle" checked={bulkGoogleMode === 'keep'} onChange={() => setBulkGoogleMode('keep')} /> 変更なし</label>
+                    <label className="radioLabel"><input type="radio" name="bulkGoogle" checked={bulkGoogleMode === 'on'} onChange={() => setBulkGoogleMode('on')} /> ON</label>
+                    <label className="radioLabel"><input type="radio" name="bulkGoogle" checked={bulkGoogleMode === 'off'} onChange={() => setBulkGoogleMode('off')} /> OFF</label>
+                  </div>
                 </div>
-                <div className="utilityButtons">
-                  <button className="ghost" onClick={() => void copyEntriesAsTsv('visible')}>表示中をTSVコピー</button>
+                <div className="bulkEditActions">
+                  <button className="ghost small" onClick={clearBulkEditDraft}>リセット</button>
+                  <button className="ghost small" onClick={() => applyBulkEdit('visible')}>表示中に適用</button>
+                  <button className="primary small" onClick={() => applyBulkEdit('selected')} disabled={stats.selected === 0}>選択中に適用</button>
                 </div>
               </div>
             </article>
@@ -819,7 +872,7 @@ function App() {
                   <span className="sectionLabel">Auto Backup</span>
                   <h3>復元ポイント</h3>
                 </div>
-                <span className="metaPill">最新 {backups.length} 件</span>
+                <span className="metaPill">最新 {backups.length} 件保持</span>
               </div>
 
               <div className="backupList">
@@ -829,21 +882,31 @@ function App() {
                     <p>保存・追加・取込・復元の前に自動で積みます。</p>
                   </div>
                 ) : (
-                  backups.slice(0, 6).map((snapshot) => (
-                    <div key={snapshot.id} className="backupItem">
-                      <div>
-                        <strong>{snapshot.label}</strong>
-                        <span>{backupTriggerLabel(snapshot.trigger)} / {snapshot.entryCount} 件 / {formatTime(snapshot.createdAt)}</span>
+                  backups.slice(0, 8).map((snapshot, index) => {
+                    const prevSnapshot = backups[index + 1];
+                    const diff = prevSnapshot ? snapshot.entryCount - prevSnapshot.entryCount : null;
+                    const diffLabel = diff === null ? '' : diff > 0 ? `+${diff}` : diff < 0 ? `${diff}` : `±0`;
+                    const diffClass = diff === null ? '' : diff > 0 ? 'diffPlus' : diff < 0 ? 'diffMinus' : 'diffZero';
+                    return (
+                      <div key={snapshot.id} className="backupItem">
+                        <div className="backupItemInfo">
+                          <div className="backupItemHeader">
+                            <span className={`backupTriggerBadge trigger-${snapshot.trigger}`}>{backupTriggerLabel(snapshot.trigger)}</span>
+                            {diffLabel && <span className={`backupDiff ${diffClass}`}>{diffLabel} 件</span>}
+                          </div>
+                          <strong>{snapshot.entryCount} 件</strong>
+                          <span>{formatTime(snapshot.createdAt)}</span>
+                        </div>
+                        <button
+                          className="ghost small"
+                          onClick={() => void restoreBackup(snapshot.id)}
+                          disabled={restoringBackupId === snapshot.id}
+                        >
+                          {restoringBackupId === snapshot.id ? '復元中...' : '復元'}
+                        </button>
                       </div>
-                      <button
-                        className="ghost"
-                        onClick={() => void restoreBackup(snapshot.id)}
-                        disabled={restoringBackupId === snapshot.id}
-                      >
-                        {restoringBackupId === snapshot.id ? '復元中...' : '復元'}
-                      </button>
-                    </div>
-                  ))
+                    );
+                  })
                 )}
               </div>
             </article>
@@ -1182,6 +1245,32 @@ function App() {
                 disabled={!keepDuplicateId}
               >
                 この1件を残して解決（{activeDuplicateEntries.length - 1} 件を除去）
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
+
+      {confirmAction && (
+        <div className="modalOverlay" onClick={() => setConfirmAction(null)}>
+          <section className="modalCard glass confirmCard" onClick={(e) => e.stopPropagation()}>
+            <div className="modalHeader">
+              <div>
+                <span className="sectionLabel">確認</span>
+                <h3>{confirmAction.label}</h3>
+                <p className="panelLead">{confirmAction.detail}</p>
+              </div>
+            </div>
+            <div className="modalActions">
+              <button className="ghost" onClick={() => setConfirmAction(null)}>キャンセル</button>
+              <button
+                className="danger"
+                onClick={() => {
+                  confirmAction.onConfirm();
+                  setConfirmAction(null);
+                }}
+              >
+                実行する
               </button>
             </div>
           </section>

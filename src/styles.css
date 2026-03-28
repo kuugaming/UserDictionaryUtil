@@ -1193,3 +1193,123 @@ th input[type='checkbox'] {
     padding: 14px;
   }
 }
+
+/* ── Bulk Edit (Phase B2/C) ─────────────────────────────────── */
+.bulkEditNote {
+  font-size: 12px;
+  color: #7b92b0;
+  margin: 0;
+}
+
+.bulkEditGrid {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.bulkEditLabel {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  color: #9eb2cd;
+}
+
+.bulkEditLabel input {
+  padding: 6px 10px;
+  font-size: 13px;
+}
+
+.bulkFlagRow {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  font-size: 13px;
+  color: #9eb2cd;
+}
+
+.bulkFlagRow span {
+  width: 52px;
+  font-size: 12px;
+}
+
+.radioLabel {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  cursor: pointer;
+  color: #c5d4e8;
+  font-size: 13px;
+}
+
+.radioLabel input[type="radio"] {
+  accent-color: #6366f1;
+  width: 14px;
+  height: 14px;
+}
+
+.bulkEditActions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  margin-top: 4px;
+}
+
+button.primary.small {
+  padding: 5px 14px;
+  font-size: 12px;
+  border-radius: 8px;
+}
+
+/* ── Confirm Modal (Phase C) ────────────────────────────────── */
+.confirmCard {
+  max-width: 460px;
+}
+
+/* ── Backup Panel (Phase D) ─────────────────────────────────── */
+.backupItemInfo {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  flex: 1;
+}
+
+.backupItemHeader {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.backupTriggerBadge {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 6px;
+  letter-spacing: 0.04em;
+}
+
+.trigger-save   { background: rgba(99, 102, 241, 0.18); color: #a5b4fc; }
+.trigger-add    { background: rgba(16, 185, 129, 0.18); color: #6ee7b7; }
+.trigger-import { background: rgba(245, 158, 11, 0.18); color: #fcd34d; }
+.trigger-restore{ background: rgba(239, 68, 68,  0.18); color: #fca5a5; }
+
+.backupDiff {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 1px 7px;
+  border-radius: 5px;
+}
+
+.diffPlus  { background: rgba(16, 185, 129, 0.15); color: #6ee7b7; }
+.diffMinus { background: rgba(239, 68, 68,  0.15); color: #fca5a5; }
+.diffZero  { background: rgba(148, 163, 184, 0.12); color: #94a3b8; }
+
+.backupItem strong {
+  font-size: 13px;
+  color: #c5d4e8;
+}
+
+.backupItem span {
+  font-size: 11px;
+  color: #7b92b0;
+}
