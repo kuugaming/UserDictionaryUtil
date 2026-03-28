@@ -13,6 +13,13 @@ type ActivityItem = {
 type SortMode = 'updated-desc' | 'reading-asc' | 'word-asc';
 type ViewMode = 'all' | 'apple' | 'google' | 'dual' | 'note' | 'duplicate';
 type BulkScope = 'selected' | 'visible';
+type FilterPreset = {
+  id: string;
+  name: string;
+  query: string;
+  viewMode: ViewMode;
+  sortMode: SortMode;
+};
 
 type DuplicateGroup = {
   key: string;
@@ -23,6 +30,7 @@ type DuplicateGroup = {
 };
 
 type BulkFlagMode = 'keep' | 'on' | 'off';
+const FILTER_PRESET_STORAGE_KEY = 'udu-filter-presets-v1';
 
 function formatTime(iso: string) {
   try {
@@ -107,6 +115,7 @@ function App() {
   const [activeDuplicateGroup, setActiveDuplicateGroup] = useState<DuplicateGroup | null>(null);
   const [keepDuplicateId, setKeepDuplicateId] = useState<string>('');
   const [confirmAction, setConfirmAction] = useState<{ label: string; detail: string; onConfirm: () => void } | null>(null);
+  const [filterPresets, setFilterPresets] = useState<FilterPreset[]>([]);
 
   async function refreshBackups() {
     const snapshotList = await window.udu.listBackups();
@@ -147,6 +156,48 @@ function App() {
       }
     };
   }, [importPreview]);
+
+  useEffect(() => {
+    try {
+      const raw = window.localStorage.getItem(FILTER_PRESET_STORAGE_KEY);
+      if (!raw) return;
+      const parsed = JSON.parse(raw) as unknown;
+      if (!Array.isArray(parsed)) return;
+      const restored = parsed
+        .map((item) => {
+          if (!item || typeof item !== 'object') return null;
+          const candidate = item as Partial<FilterPreset>;
+          if (
+            typeof candidate.id !== 'string'
+            || typeof candidate.name !== 'string'
+            || typeof candidate.query !== 'string'
+            || typeof candidate.viewMode !== 'string'
+            || typeof candidate.sortMode !== 'string'
+          ) {
+            return null;
+          }
+          return {
+            id: candidate.id,
+            name: candidate.name,
+            query: candidate.query,
+            viewMode: candidate.viewMode as ViewMode,
+            sortMode: candidate.sortMode as SortMode
+          };
+        })
+        .filter((item): item is FilterPreset => item !== null);
+      setFilterPresets(restored.slice(0, 6));
+    } catch {
+      setFilterPresets([]);
+    }
+  }, []);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(FILTER_PRESET_STORAGE_KEY, JSON.stringify(filterPresets));
+    } catch {
+      // ignore
+    }
+  }, [filterPresets]);
 
   function pushActivity(label: string, tone: ActivityItem['tone']) {
     setActivities((prev) => [makeActivity(label, tone), ...prev].slice(0, 12));
@@ -631,6 +682,41 @@ function App() {
     setStatus(`重複候補: ${group.reading} → ${group.word} を絞り込みました。`);
   }
 
+  function saveCurrentFilterPreset() {
+    const trimmedQuery = query.trim();
+    const presetName = window.prompt('プリセット名を入力してください（例: 重複チェック / Apple確認）');
+    if (!presetName) return;
+    const trimmedName = presetName.trim();
+    if (!trimmedName) {
+      setStatus('プリセット名が空のため保存をスキップしました。');
+      return;
+    }
+
+    const nextPreset: FilterPreset = {
+      id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      name: trimmedName,
+      query: trimmedQuery,
+      viewMode,
+      sortMode
+    };
+    setFilterPresets((prev) => [nextPreset, ...prev].slice(0, 6));
+    setStatus(`フィルタプリセット「${trimmedName}」を保存しました。`);
+    pushActivity(`フィルタプリセット保存: ${trimmedName}`, 'success');
+  }
+
+  function applyFilterPreset(preset: FilterPreset) {
+    setQuery(preset.query);
+    setViewMode(preset.viewMode);
+    setSortMode(preset.sortMode);
+    setStatus(`フィルタプリセット「${preset.name}」を適用しました。`);
+    pushActivity(`フィルタプリセット適用: ${preset.name}`, 'info');
+  }
+
+  function removeFilterPreset(presetId: string) {
+    setFilterPresets((prev) => prev.filter((preset) => preset.id !== presetId));
+    setStatus('フィルタプリセットを削除しました。');
+  }
+
   const filterItems: Array<{ key: ViewMode; label: string; count: number }> = [
     { key: 'all', label: 'すべて', count: stats.total },
     { key: 'apple', label: 'Apple有効', count: stats.apple },
@@ -1015,6 +1101,7 @@ function App() {
                   <option value="reading-asc">読み順</option>
                   <option value="word-asc">単語順</option>
                 </select>
+                <button className="ghost" onClick={saveCurrentFilterPreset}>条件を保存</button>
                 <button className="ghost" onClick={() => { setQuery(''); setViewMode('all'); }}>絞り込み解除</button>
                 <button className="danger" onClick={() => void removeSelected()} disabled={selectedIds.length === 0}>選択削除</button>
               </div>
@@ -1039,6 +1126,19 @@ function App() {
               <span>{latestActivity ? `最終操作 ${formatTime(latestActivity.timestamp)}` : 'まだ操作なし'}</span>
               {stats.duplicateGroups > 0 && <span className="warningText">保存前の重複候補 {stats.duplicateGroups} 組</span>}
             </div>
+
+            {filterPresets.length > 0 && (
+              <div className="presetRow">
+                {filterPresets.map((preset) => (
+                  <div key={preset.id} className="presetChip">
+                    <button className="ghost small" onClick={() => applyFilterPreset(preset)}>
+                      {preset.name}
+                    </button>
+                    <button className="danger subtle" onClick={() => removeFilterPreset(preset.id)}>×</button>
+                  </div>
+                ))}
+              </div>
+            )}
 
             <div className="tableWrap">
               <table>
