@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import type { BackupSnapshotMeta, DictionaryEntry, ImportPreview, ImportSource } from './types';
+import type { BackupDiffReport, BackupSnapshotMeta, DictionaryEntry, ImportPreview, ImportSource } from './types';
 
 const DEFAULT_POS = '名詞';
 
@@ -97,6 +97,8 @@ function App() {
   const [isApplyingImport, setIsApplyingImport] = useState(false);
   const [backups, setBackups] = useState<BackupSnapshotMeta[]>([]);
   const [restoringBackupId, setRestoringBackupId] = useState<string | null>(null);
+  const [loadingDiffBackupId, setLoadingDiffBackupId] = useState<string | null>(null);
+  const [backupDiff, setBackupDiff] = useState<BackupDiffReport | null>(null);
   const [bulkPosValue, setBulkPosValue] = useState('');
   const [bulkNotePrefix, setBulkNotePrefix] = useState('');
   const [bulkNoteSuffix, setBulkNoteSuffix] = useState('');
@@ -529,6 +531,23 @@ function App() {
     }
   }
 
+  async function openBackupDiff(snapshotId: string) {
+    setLoadingDiffBackupId(snapshotId);
+    try {
+      const result = await window.udu.diffBackup(snapshotId);
+      if (!result) {
+        setStatus('比較対象の前スナップショットが見つかりませんでした。');
+        pushActivity('バックアップ差分表示に失敗', 'warn');
+        return;
+      }
+      setBackupDiff(result);
+      setStatus(`差分比較を表示: 追加 ${result.summary.added} / 削除 ${result.summary.removed} / 変更 ${result.summary.changed}`);
+      pushActivity(`バックアップ差分: +${result.summary.added} / -${result.summary.removed} / Δ${result.summary.changed}`, 'info');
+    } finally {
+      setLoadingDiffBackupId(null);
+    }
+  }
+
   function clearBulkEditDraft() {
     setBulkPosValue('');
     setBulkNotePrefix('');
@@ -897,13 +916,22 @@ function App() {
                           <strong>{snapshot.entryCount} 件</strong>
                           <span>{formatTime(snapshot.createdAt)}</span>
                         </div>
-                        <button
-                          className="ghost small"
-                          onClick={() => void restoreBackup(snapshot.id)}
-                          disabled={restoringBackupId === snapshot.id}
-                        >
-                          {restoringBackupId === snapshot.id ? '復元中...' : '復元'}
-                        </button>
+                        <div className="backupItemActions">
+                          <button
+                            className="ghost small"
+                            onClick={() => void restoreBackup(snapshot.id)}
+                            disabled={restoringBackupId === snapshot.id}
+                          >
+                            {restoringBackupId === snapshot.id ? '復元中...' : '復元'}
+                          </button>
+                          <button
+                            className="ghost small"
+                            onClick={() => void openBackupDiff(snapshot.id)}
+                            disabled={!prevSnapshot || loadingDiffBackupId === snapshot.id}
+                          >
+                            {loadingDiffBackupId === snapshot.id ? '比較中...' : '差分を見る'}
+                          </button>
+                        </div>
                       </div>
                     );
                   })
@@ -1272,6 +1300,96 @@ function App() {
               >
                 実行する
               </button>
+            </div>
+          </section>
+        </div>
+      )}
+
+      {backupDiff && (
+        <div className="modalOverlay" onClick={() => setBackupDiff(null)}>
+          <section className="modalCard glass backupDiffModal" onClick={(event) => event.stopPropagation()}>
+            <div className="modalHeader">
+              <div>
+                <span className="sectionLabel">Backup Diff</span>
+                <h3>{formatTime(backupDiff.snapshot.createdAt)} と {formatTime(backupDiff.previous.createdAt)} を比較</h3>
+                <p className="panelLead">
+                  {backupDiff.snapshot.label}（{backupTriggerLabel(backupDiff.snapshot.trigger)}） ←→ {backupDiff.previous.label}（{backupTriggerLabel(backupDiff.previous.trigger)}）
+                </p>
+              </div>
+              <button className="ghost" onClick={() => setBackupDiff(null)}>閉じる</button>
+            </div>
+
+            <div className="previewStatsGrid">
+              <article className="previewStatCard successTone"><span>追加</span><strong>{backupDiff.summary.added}</strong></article>
+              <article className="previewStatCard dangerTone"><span>削除</span><strong>{backupDiff.summary.removed}</strong></article>
+              <article className="previewStatCard infoTone"><span>変更</span><strong>{backupDiff.summary.changed}</strong></article>
+            </div>
+
+            <div className="previewSections">
+              <article className="previewPanel">
+                <div className="previewPanelHeader">
+                  <strong>追加サンプル</strong>
+                  <span>{backupDiff.samples.added.length} 件表示</span>
+                </div>
+                {backupDiff.samples.added.length === 0 ? (
+                  <p className="previewEmpty">追加差分はありません。</p>
+                ) : (
+                  <div className="previewList">
+                    {backupDiff.samples.added.map((item) => (
+                      <div key={item.id} className="previewRow">
+                        <div>
+                          <strong>{item.reading} → {item.word}</strong>
+                          <span>{item.pos}{item.note ? ` / ${item.note}` : ''}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </article>
+
+              <article className="previewPanel">
+                <div className="previewPanelHeader">
+                  <strong>削除サンプル</strong>
+                  <span>{backupDiff.samples.removed.length} 件表示</span>
+                </div>
+                {backupDiff.samples.removed.length === 0 ? (
+                  <p className="previewEmpty">削除差分はありません。</p>
+                ) : (
+                  <div className="previewList">
+                    {backupDiff.samples.removed.map((item) => (
+                      <div key={item.id} className="previewRow dangerRow">
+                        <div>
+                          <strong>{item.reading} → {item.word}</strong>
+                          <span>{item.pos}{item.note ? ` / ${item.note}` : ''}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </article>
+
+              <article className="previewPanel fullWidthPanel">
+                <div className="previewPanelHeader">
+                  <strong>変更サンプル</strong>
+                  <span>{backupDiff.samples.changed.length} 件表示</span>
+                </div>
+                {backupDiff.samples.changed.length === 0 ? (
+                  <p className="previewEmpty">変更差分はありません。</p>
+                ) : (
+                  <div className="previewList">
+                    {backupDiff.samples.changed.map((change) => (
+                      <div key={change.id} className="previewRow muted">
+                        <div>
+                          <strong>{change.after.reading} → {change.after.word}</strong>
+                          <span>変更: {change.changedFields.join(', ')}</span>
+                          <span>Before: {change.before.pos || '—'} / {change.before.note || '—'} / A:{change.before.enabledApple ? 'ON' : 'OFF'} G:{change.before.enabledGoogle ? 'ON' : 'OFF'}</span>
+                          <span>After: {change.after.pos || '—'} / {change.after.note || '—'} / A:{change.after.enabledApple ? 'ON' : 'OFF'} G:{change.after.enabledGoogle ? 'ON' : 'OFF'}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </article>
             </div>
           </section>
         </div>

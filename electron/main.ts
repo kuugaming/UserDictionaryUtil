@@ -87,6 +87,30 @@ type BackupSnapshot = {
 
 type BackupSnapshotMeta = Omit<BackupSnapshot, 'entries'>;
 
+type BackupDiffItem = Pick<DictionaryEntry, 'id' | 'reading' | 'word' | 'pos' | 'note' | 'enabledApple' | 'enabledGoogle'>;
+type BackupDiffField = 'reading' | 'word' | 'pos' | 'note' | 'enabledApple' | 'enabledGoogle';
+type BackupDiffChange = {
+  id: string;
+  before: BackupDiffItem;
+  after: BackupDiffItem;
+  changedFields: BackupDiffField[];
+};
+
+type BackupDiffReport = {
+  snapshot: BackupSnapshotMeta;
+  previous: BackupSnapshotMeta;
+  summary: {
+    added: number;
+    removed: number;
+    changed: number;
+  };
+  samples: {
+    added: BackupDiffItem[];
+    removed: BackupDiffItem[];
+    changed: BackupDiffChange[];
+  };
+};
+
 const DEFAULT_POS = '名詞';
 const CSV_HEADERS = ['reading', 'word', 'pos', 'note', 'enabledApple', 'enabledGoogle'];
 const MAX_BACKUP_HISTORY = 20;
@@ -200,6 +224,76 @@ function toBackupMeta(snapshot: BackupSnapshot): BackupSnapshotMeta {
     label: snapshot.label,
     trigger: snapshot.trigger,
     entryCount: snapshot.entryCount
+  };
+}
+
+function toBackupDiffItem(entry: DictionaryEntry): BackupDiffItem {
+  return {
+    id: entry.id,
+    reading: entry.reading,
+    word: entry.word,
+    pos: entry.pos,
+    note: entry.note,
+    enabledApple: entry.enabledApple,
+    enabledGoogle: entry.enabledGoogle
+  };
+}
+
+function diffBackupEntries(
+  current: DictionaryEntry[],
+  previous: DictionaryEntry[]
+): { summary: BackupDiffReport['summary']; samples: BackupDiffReport['samples'] } {
+  const currentMap = new Map(current.map((entry) => [entry.id, entry]));
+  const previousMap = new Map(previous.map((entry) => [entry.id, entry]));
+
+  const added: BackupDiffItem[] = [];
+  const removed: BackupDiffItem[] = [];
+  const changed: BackupDiffChange[] = [];
+
+  for (const [id, entry] of currentMap) {
+    if (!previousMap.has(id)) {
+      added.push(toBackupDiffItem(entry));
+      continue;
+    }
+
+    const before = previousMap.get(id);
+    if (!before) continue;
+
+    const changedFields: BackupDiffField[] = [];
+    if (entry.reading !== before.reading) changedFields.push('reading');
+    if (entry.word !== before.word) changedFields.push('word');
+    if (entry.pos !== before.pos) changedFields.push('pos');
+    if (entry.note !== before.note) changedFields.push('note');
+    if (entry.enabledApple !== before.enabledApple) changedFields.push('enabledApple');
+    if (entry.enabledGoogle !== before.enabledGoogle) changedFields.push('enabledGoogle');
+
+    if (changedFields.length > 0) {
+      changed.push({
+        id,
+        before: toBackupDiffItem(before),
+        after: toBackupDiffItem(entry),
+        changedFields
+      });
+    }
+  }
+
+  for (const [id, entry] of previousMap) {
+    if (!currentMap.has(id)) {
+      removed.push(toBackupDiffItem(entry));
+    }
+  }
+
+  return {
+    summary: {
+      added: added.length,
+      removed: removed.length,
+      changed: changed.length
+    },
+    samples: {
+      added: added.slice(0, 12),
+      removed: removed.slice(0, 12),
+      changed: changed.slice(0, 12)
+    }
   };
 }
 
@@ -816,6 +910,23 @@ app.whenReady().then(() => {
     recordBackup('restore', '復元前の自動スナップショット', currentEntries);
     writeEntries(cloneEntries(snapshot.entries));
     return readEntries();
+  });
+
+  ipcMain.handle('backup:diff', async (_event, snapshotId: string) => {
+    const snapshots = readBackupSnapshots();
+    const index = snapshots.findIndex((item) => item.id === snapshotId);
+    if (index < 0) return null;
+    const snapshot = snapshots[index];
+    const previous = snapshots[index + 1];
+    if (!snapshot || !previous) return null;
+
+    const diff = diffBackupEntries(snapshot.entries, previous.entries);
+    return {
+      snapshot: toBackupMeta(snapshot),
+      previous: toBackupMeta(previous),
+      summary: diff.summary,
+      samples: diff.samples
+    } satisfies BackupDiffReport;
   });
 
   ipcMain.handle('storage:path', async () => getDataFilePath());

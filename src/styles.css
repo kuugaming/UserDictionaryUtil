@@ -581,6 +581,11 @@ small {
   gap: 12px;
 }
 
+.backupItemActions {
+  display: flex;
+  gap: 8px;
+}
+
 .backupItem strong,
 .backupEmptyState strong {
   display: block;
@@ -1264,6 +1269,10 @@ button.primary.small {
 /* ── Confirm Modal (Phase C) ────────────────────────────────── */
 .confirmCard {
   max-width: 460px;
+}
+
+.backupDiffModal {
+  width: min(980px, 100%);
 }
 
 /* ── Backup Panel (Phase D) ─────────────────────────────────── */

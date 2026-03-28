@@ -54,6 +54,38 @@ export type BackupSnapshotMeta = {
   entryCount: number;
 };
 
+export type BackupDiffItem = {
+  id: string;
+  reading: string;
+  word: string;
+  pos: string;
+  note: string;
+  enabledApple: boolean;
+  enabledGoogle: boolean;
+};
+
+export type BackupDiffChange = {
+  id: string;
+  before: BackupDiffItem;
+  after: BackupDiffItem;
+  changedFields: Array<'reading' | 'word' | 'pos' | 'note' | 'enabledApple' | 'enabledGoogle'>;
+};
+
+export type BackupDiffReport = {
+  snapshot: BackupSnapshotMeta;
+  previous: BackupSnapshotMeta;
+  summary: {
+    added: number;
+    removed: number;
+    changed: number;
+  };
+  samples: {
+    added: BackupDiffItem[];
+    removed: BackupDiffItem[];
+    changed: BackupDiffChange[];
+  };
+};
+
 declare global {
   interface Window {
     udu: {
@@ -72,6 +104,7 @@ declare global {
       exportBackupJson: () => Promise<{ count: number; filePath: string } | null>;
       listBackups: () => Promise<BackupSnapshotMeta[]>;
       restoreBackup: (snapshotId: string) => Promise<DictionaryEntry[] | null>;
+      diffBackup: (snapshotId: string) => Promise<BackupDiffReport | null>;
       getStoragePath: () => Promise<string>;
     };
   }
