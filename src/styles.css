@@ -666,6 +666,9 @@ small {
 }
 
 .duplicateGroupCard {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
   text-align: left;
   border-radius: 18px;
   padding: 16px;
@@ -673,10 +676,20 @@ small {
   border: 1px solid rgba(245, 158, 11, 0.18);
 }
 
+.duplicateGroupInfo {
+  cursor: pointer;
+  flex: 1;
+}
+
+.duplicateGroupInfo:hover strong {
+  color: #f59e0b;
+}
+
 .duplicateGroupCard strong {
   display: block;
   margin-bottom: 6px;
   line-height: 1.5;
+  transition: color 0.15s;
 }
 
 .duplicateGroupCard span,
@@ -690,6 +703,109 @@ small {
 .duplicateGroupCard em {
   font-style: normal;
   margin-top: 8px;
+}
+
+.duplicateGroupActions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+button.small {
+  padding: 4px 10px;
+  font-size: 12px;
+  border-radius: 8px;
+}
+
+button.resolveButton {
+  padding: 4px 12px;
+  font-size: 12px;
+  border-radius: 8px;
+  background: linear-gradient(135deg, #f59e0b, #d97706);
+  color: #0b1220;
+  border: none;
+  font-weight: 700;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+
+button.resolveButton:hover {
+  opacity: 0.85;
+}
+
+/* Duplicate Resolution Modal */
+.duplicateResolutionList {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-height: 380px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.duplicateResolutionRow {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px 16px;
+  border-radius: 14px;
+  border: 1px solid rgba(148, 163, 184, 0.12);
+  background: rgba(15, 23, 42, 0.5);
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.duplicateResolutionRow:hover {
+  border-color: rgba(245, 158, 11, 0.35);
+  background: rgba(245, 158, 11, 0.06);
+}
+
+.duplicateResolutionRow.selectedResolution {
+  border-color: rgba(245, 158, 11, 0.6);
+  background: rgba(245, 158, 11, 0.1);
+}
+
+.duplicateResolutionRow input[type="radio"] {
+  margin-top: 3px;
+  accent-color: #f59e0b;
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+}
+
+.resolutionEntryDetail {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.resolutionEntryMain {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.resolutionEntryMain strong {
+  font-size: 14px;
+  color: #e2eaf4;
+}
+
+.resolutionReason {
+  font-size: 11px;
+  color: #f59e0b;
+  background: rgba(245, 158, 11, 0.12);
+  padding: 2px 8px;
+  border-radius: 6px;
+}
+
+.resolutionEntryMeta {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  font-size: 11px;
+  color: #7b92b0;
 }
 
 .tablePanel {

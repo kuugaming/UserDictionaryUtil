@@ -892,13 +892,19 @@ function App() {
             ) : (
               <div className="duplicateGroupList">
                 {duplicateGroups.slice(0, 8).map((group) => (
-                  <button key={group.key} className="duplicateGroupCard" onClick={() => focusDuplicateGroup(group)}>
-                    <div>
-                      <strong>{group.reading} → {group.word}</strong>
-                      <span>{group.count} 件が重複候補。クリックで絞り込み。</span>
+                  <div key={group.key} className="duplicateGroupCard">
+                    <div className="duplicateGroupInfo" onClick={() => focusDuplicateGroup(group)}>
+                      <div>
+                        <strong>{group.reading} → {group.word}</strong>
+                        <span>{group.count} 件が重複候補。</span>
+                      </div>
+                      <em>{group.entries.map((entry) => entry.note).filter(Boolean).slice(0, 2).join(' / ') || 'メモなし'}</em>
                     </div>
-                    <em>{group.entries.map((entry) => entry.note).filter(Boolean).slice(0, 2).join(' / ') || 'メモなし'}</em>
-                  </button>
+                    <div className="duplicateGroupActions">
+                      <button className="ghost small" onClick={() => focusDuplicateGroup(group)}>絞り込み</button>
+                      <button className="resolveButton small" onClick={() => openDuplicateResolution(group)}>詳細で解決</button>
+                    </div>
+                  </div>
                 ))}
               </div>
             )}
@@ -1120,6 +1126,62 @@ function App() {
               <button className="ghost" onClick={() => void closeImportPreview()}>キャンセル</button>
               <button className="primary" onClick={() => void applyImportPreview()} disabled={isApplyingImport || importPreview.added === 0}>
                 {isApplyingImport ? '取り込み中...' : `${importPreview.added} 件を取り込む`}
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
+
+      {activeDuplicateGroup && (
+        <div className="modalOverlay" onClick={() => setActiveDuplicateGroup(null)}>
+          <section className="modalCard glass" onClick={(event) => event.stopPropagation()}>
+            <div className="modalHeader">
+              <div>
+                <span className="sectionLabel">Duplicate Resolution</span>
+                <h3>{activeDuplicateGroup.reading} → {activeDuplicateGroup.word}</h3>
+                <p className="panelLead">残す1件を選んで「この1件を残して解決」。保存で確定します。</p>
+              </div>
+              <button className="ghost" onClick={() => setActiveDuplicateGroup(null)}>閉じる</button>
+            </div>
+
+            <div className="duplicateResolutionList">
+              {activeDuplicateEntries.map((entry, index) => (
+                <label
+                  key={entry.id}
+                  className={`duplicateResolutionRow ${keepDuplicateId === entry.id ? 'selectedResolution' : ''}`}
+                >
+                  <input
+                    type="radio"
+                    name="keepDuplicate"
+                    value={entry.id}
+                    checked={keepDuplicateId === entry.id}
+                    onChange={() => setKeepDuplicateId(entry.id)}
+                  />
+                  <div className="resolutionEntryDetail">
+                    <div className="resolutionEntryMain">
+                      <strong>{entry.reading} → {entry.word}</strong>
+                      <span className="resolutionReason">{index === 0 ? '最新更新（デフォルト選択）' : `${index + 1} 番目`}</span>
+                    </div>
+                    <div className="resolutionEntryMeta">
+                      <span>品詞: {entry.pos || '—'}</span>
+                      <span>メモ: {entry.note || '—'}</span>
+                      <span>Apple: {entry.enabledApple ? 'ON' : 'OFF'}</span>
+                      <span>Google: {entry.enabledGoogle ? 'ON' : 'OFF'}</span>
+                      <span>更新: {formatTime(entry.updatedAt)}</span>
+                    </div>
+                  </div>
+                </label>
+              ))}
+            </div>
+
+            <div className="modalActions">
+              <button className="ghost" onClick={() => setActiveDuplicateGroup(null)}>キャンセル</button>
+              <button
+                className="primary"
+                onClick={resolveActiveDuplicateGroup}
+                disabled={!keepDuplicateId}
+              >
+                この1件を残して解決（{activeDuplicateEntries.length - 1} 件を除去）
               </button>
             </div>
           </section>
