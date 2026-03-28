@@ -227,14 +227,14 @@ This app prioritizes practical daily usability over features.
 
 - [ ] 重複解決 UI のさらなる改善 / Further duplicate resolution UX improvements
 - [ ] 一括編集の拡張（フィルタ連動） / Extended bulk edit with filter integration
-- [ ] バックアップ履歴の詳細比較 / Detailed snapshot diff view
+- [x] バックアップ履歴の詳細比較 / Detailed snapshot diff view
 - [ ] 配布ビルドの整備・リリース / Packaging and release
 - [ ] アイコン・スプラッシュ画面 / App icon and splash screen
-- [ ] ライセンスの明記 / License declaration
+- [x] ライセンスの明記 / License declaration
 
 ---
 
 ## ライセンス / License
 
-現時点では未設定です。必要なら後で追加してください。  
-License is not yet specified. To be added later.
+MIT License. 詳細は [`LICENSE`](./LICENSE) を参照してください。  
+Released under the MIT License. See [`LICENSE`](./LICENSE) for details.
