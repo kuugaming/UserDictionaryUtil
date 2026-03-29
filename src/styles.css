@@ -813,6 +813,28 @@ button.resolveButton:hover {
   color: #7b92b0;
 }
 
+.resolutionToolbar {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.resolutionNav {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: #9fb1c8;
+  font-size: 12px;
+}
+
+.resolutionPresets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
 .tablePanel {
   padding-bottom: 14px;
 }

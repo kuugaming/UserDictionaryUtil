@@ -317,6 +317,10 @@ function App() {
       .filter((entry) => dedupeKey(entry.reading, entry.word) === activeDuplicateGroup.key)
       .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt) || b.createdAt.localeCompare(a.createdAt));
   }, [entries, activeDuplicateGroup]);
+  const activeDuplicateGroupIndex = useMemo(() => {
+    if (!activeDuplicateGroup) return -1;
+    return duplicateGroups.findIndex((group) => group.key === activeDuplicateGroup.key);
+  }, [duplicateGroups, activeDuplicateGroup]);
 
   function clearDraft() {
     setReading('');
@@ -650,6 +654,29 @@ function App() {
     const sortedGroup = [...group.entries].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt) || b.createdAt.localeCompare(a.createdAt));
     setActiveDuplicateGroup(group);
     setKeepDuplicateId(sortedGroup[0]?.id ?? '');
+  }
+
+  function jumpDuplicateGroup(offset: number) {
+    if (!activeDuplicateGroup || activeDuplicateGroupIndex < 0) return;
+    const nextIndex = activeDuplicateGroupIndex + offset;
+    if (nextIndex < 0 || nextIndex >= duplicateGroups.length) return;
+    const nextGroup = duplicateGroups[nextIndex];
+    if (!nextGroup) return;
+    openDuplicateResolution(nextGroup);
+  }
+
+  function pickDuplicateResolution(mode: 'latest' | 'oldest' | 'apple-on' | 'google-on') {
+    if (activeDuplicateEntries.length === 0) return;
+    let picked = activeDuplicateEntries[0];
+    if (mode === 'oldest') {
+      picked = [...activeDuplicateEntries]
+        .sort((a, b) => a.updatedAt.localeCompare(b.updatedAt) || a.createdAt.localeCompare(b.createdAt))[0];
+    } else if (mode === 'apple-on') {
+      picked = activeDuplicateEntries.find((entry) => entry.enabledApple) ?? activeDuplicateEntries[0];
+    } else if (mode === 'google-on') {
+      picked = activeDuplicateEntries.find((entry) => entry.enabledGoogle) ?? activeDuplicateEntries[0];
+    }
+    setKeepDuplicateId(picked.id);
   }
 
   function resolveActiveDuplicateGroup() {
@@ -1333,6 +1360,20 @@ function App() {
                 <p className="panelLead">残す1件を選んで「この1件を残して解決」。保存で確定します。</p>
               </div>
               <button className="ghost" onClick={() => setActiveDuplicateGroup(null)}>閉じる</button>
+            </div>
+
+            <div className="resolutionToolbar">
+              <div className="resolutionNav">
+                <button className="ghost small" onClick={() => jumpDuplicateGroup(-1)} disabled={activeDuplicateGroupIndex <= 0}>← 前の重複</button>
+                <span>{activeDuplicateGroupIndex + 1} / {duplicateGroups.length} グループ</span>
+                <button className="ghost small" onClick={() => jumpDuplicateGroup(1)} disabled={activeDuplicateGroupIndex < 0 || activeDuplicateGroupIndex >= duplicateGroups.length - 1}>次の重複 →</button>
+              </div>
+              <div className="resolutionPresets">
+                <button className="ghost small" onClick={() => pickDuplicateResolution('latest')}>最新更新を残す</button>
+                <button className="ghost small" onClick={() => pickDuplicateResolution('oldest')}>最古更新を残す</button>
+                <button className="ghost small" onClick={() => pickDuplicateResolution('apple-on')}>Apple ON優先</button>
+                <button className="ghost small" onClick={() => pickDuplicateResolution('google-on')}>Google ON優先</button>
+              </div>
             </div>
 
             <div className="duplicateResolutionList">
