@@ -148,6 +148,10 @@ npm run build
 > Replace icon files in `build/` before packaging.
 
 ```bash
+npm run dist:check   # 配布前チェック（アイコン不足なら失敗）
+```
+
+```bash
 # Windows インストーラー (.exe / NSIS)
 npm run dist:win
 
