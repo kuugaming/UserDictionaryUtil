@@ -17,5 +17,6 @@ contextBridge.exposeInMainWorld('udu', {
   listBackups: () => ipcRenderer.invoke('backup:list'),
   restoreBackup: (snapshotId: string) => ipcRenderer.invoke('backup:restore', snapshotId),
   diffBackup: (snapshotId: string) => ipcRenderer.invoke('backup:diff', snapshotId),
-  getStoragePath: () => ipcRenderer.invoke('storage:path')
+  getStoragePath: () => ipcRenderer.invoke('storage:path'),
+  getAppMeta: () => ipcRenderer.invoke('app:meta')
 });

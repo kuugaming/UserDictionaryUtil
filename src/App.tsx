@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import type { BackupDiffReport, BackupSnapshotMeta, DictionaryEntry, ImportPreview, ImportSource } from './types';
+import type { AppMeta, BackupDiffReport, BackupSnapshotMeta, DictionaryEntry, ImportPreview, ImportSource } from './types';
 
 const DEFAULT_POS = '名詞';
 
@@ -96,6 +96,7 @@ function App() {
   const [viewMode, setViewMode] = useState<ViewMode>('all');
   const [status, setStatus] = useState('公開リポジトリ運用OK。辞書の中身だけは private 取り扱い推奨。');
   const [storagePath, setStoragePath] = useState('');
+  const [appMeta, setAppMeta] = useState<AppMeta | null>(null);
   const [activities, setActivities] = useState<ActivityItem[]>([
     makeActivity('UserDictionaryUtil を起動しました。', 'info')
   ]);
@@ -134,6 +135,7 @@ function App() {
   useEffect(() => {
     void refresh();
     window.udu.getStoragePath().then(setStoragePath).catch(() => undefined);
+    window.udu.getAppMeta().then(setAppMeta).catch(() => undefined);
   }, []);
 
   useEffect(() => {
@@ -876,6 +878,8 @@ function App() {
           <div className="sidebarSection compact">
             <span className="sectionLabel">Storage</span>
             <p className="pathText">{storagePath || '取得中...'}</p>
+            <p className="pathText">App v{appMeta?.appVersion ?? '...'} / Electron {appMeta?.electronVersion ?? '...'}</p>
+            <p className="pathText">Node {appMeta?.nodeVersion ?? '...'} / {appMeta?.platform ?? '...'}</p>
           </div>
         </aside>
 

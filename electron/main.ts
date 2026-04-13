@@ -990,6 +990,12 @@ app.whenReady().then(() => {
   });
 
   ipcMain.handle('storage:path', async () => getDataFilePath());
+  ipcMain.handle('app:meta', async () => ({
+    appVersion: app.getVersion(),
+    electronVersion: process.versions.electron,
+    nodeVersion: process.versions.node,
+    platform: process.platform
+  }));
 
   createWindow();
 
