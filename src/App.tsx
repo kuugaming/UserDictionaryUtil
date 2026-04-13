@@ -12,7 +12,7 @@ type ActivityItem = {
 
 type SortMode = 'updated-desc' | 'reading-asc' | 'word-asc';
 type ViewMode = 'all' | 'apple' | 'google' | 'dual' | 'note' | 'duplicate';
-type BulkScope = 'selected' | 'visible';
+type BulkScope = 'selected' | 'visible' | 'preset';
 type FilterPreset = {
   id: string;
   name: string;
@@ -112,6 +112,7 @@ function App() {
   const [bulkNoteSuffix, setBulkNoteSuffix] = useState('');
   const [bulkAppleMode, setBulkAppleMode] = useState<BulkFlagMode>('keep');
   const [bulkGoogleMode, setBulkGoogleMode] = useState<BulkFlagMode>('keep');
+  const [bulkPresetId, setBulkPresetId] = useState('');
   const [activeDuplicateGroup, setActiveDuplicateGroup] = useState<DuplicateGroup | null>(null);
   const [keepDuplicateId, setKeepDuplicateId] = useState<string>('');
   const [confirmAction, setConfirmAction] = useState<{ label: string; detail: string; onConfirm: () => void } | null>(null);
@@ -485,9 +486,15 @@ function App() {
   }
 
   function applyBulkToggle(scope: BulkScope, field: 'enabledApple' | 'enabledGoogle', nextValue: boolean) {
-    const targetIds = new Set(scope === 'selected' ? selectedIds : filtered.map((entry) => entry.id));
+    const targetIds = resolveBulkTargetIds(scope);
     if (targetIds.size === 0) {
-      setStatus(scope === 'selected' ? 'まず対象を選択してから一括操作して。' : '今表示されている行がありません。');
+      if (scope === 'selected') {
+        setStatus('まず対象を選択してから一括操作して。');
+      } else if (scope === 'preset') {
+        setStatus('プリセット対象が見つかりません。条件を見直してください。');
+      } else {
+        setStatus('今表示されている行がありません。');
+      }
       return;
     }
 
@@ -504,7 +511,7 @@ function App() {
     setEntries(changedEntries);
     setHasUnsavedChanges(true);
 
-    const scopeLabel = scope === 'selected' ? '選択中' : '表示中';
+    const scopeLabel = scope === 'selected' ? '選択中' : scope === 'visible' ? '表示中' : 'プリセット対象';
     const fieldLabel = field === 'enabledApple' ? 'Apple' : 'Google';
     const valueLabel = nextValue ? 'ON' : 'OFF';
     const message = `${scopeLabel} ${targetIds.size} 件の ${fieldLabel} を ${valueLabel} にしました。`;
@@ -609,12 +616,19 @@ function App() {
     setBulkNoteSuffix('');
     setBulkAppleMode('keep');
     setBulkGoogleMode('keep');
+    setBulkPresetId('');
   }
 
   function applyBulkEdit(scope: BulkScope) {
-    const targetIds = new Set(scope === 'selected' ? selectedIds : filtered.map((entry) => entry.id));
+    const targetIds = resolveBulkTargetIds(scope);
     if (targetIds.size === 0) {
-      setStatus(scope === 'selected' ? '一括編集するには対象を選択して。' : '一括編集する表示行がありません。');
+      if (scope === 'selected') {
+        setStatus('一括編集するには対象を選択して。');
+      } else if (scope === 'preset') {
+        setStatus('一括編集するプリセット対象が見つかりません。');
+      } else {
+        setStatus('一括編集する表示行がありません。');
+      }
       return;
     }
 
@@ -644,10 +658,43 @@ function App() {
 
     setEntries(nextEntries);
     setHasUnsavedChanges(true);
-    const scopeLabel = scope === 'selected' ? '選択中' : '表示中';
+    const scopeLabel = scope === 'selected' ? '選択中' : scope === 'visible' ? '表示中' : 'プリセット対象';
     const message = `${scopeLabel} ${targetIds.size} 件へ一括編集を適用しました。保存で確定します。`;
     setStatus(message);
     pushActivity(message, 'info');
+  }
+
+  function resolveBulkTargetIds(scope: BulkScope) {
+    if (scope === 'selected') {
+      return new Set(selectedIds);
+    }
+    if (scope === 'visible') {
+      return new Set(filtered.map((entry) => entry.id));
+    }
+    const preset = filterPresets.find((item) => item.id === bulkPresetId);
+    if (!preset) return new Set<string>();
+    const normalizedQuery = preset.query.trim().toLowerCase();
+    const matched = entries.filter((entry) => {
+      const matchesQuery =
+        !normalizedQuery
+        || [entry.reading, entry.word, entry.pos, entry.note].some((value) => value.toLowerCase().includes(normalizedQuery));
+      if (!matchesQuery) return false;
+      switch (preset.viewMode) {
+        case 'apple':
+          return entry.enabledApple;
+        case 'google':
+          return entry.enabledGoogle;
+        case 'dual':
+          return entry.enabledApple && entry.enabledGoogle;
+        case 'note':
+          return entry.note.trim().length > 0;
+        case 'duplicate':
+          return duplicateIdSet.has(entry.id);
+        default:
+          return true;
+      }
+    });
+    return new Set(matched.map((entry) => entry.id));
   }
 
   function openDuplicateResolution(group: DuplicateGroup) {
@@ -991,8 +1038,15 @@ function App() {
                   </div>
                 </div>
                 <div className="bulkEditActions">
+                  <select value={bulkPresetId} onChange={(e) => setBulkPresetId(e.target.value)} disabled={filterPresets.length === 0}>
+                    <option value="">プリセット対象を選択（任意）</option>
+                    {filterPresets.map((preset) => (
+                      <option key={preset.id} value={preset.id}>{preset.name}</option>
+                    ))}
+                  </select>
                   <button className="ghost small" onClick={clearBulkEditDraft}>リセット</button>
                   <button className="ghost small" onClick={() => applyBulkEdit('visible')}>表示中に適用</button>
+                  <button className="ghost small" onClick={() => applyBulkEdit('preset')} disabled={!bulkPresetId}>プリセット対象に適用</button>
                   <button className="primary small" onClick={() => applyBulkEdit('selected')} disabled={stats.selected === 0}>選択中に適用</button>
                 </div>
               </div>

@@ -1297,6 +1297,14 @@ th input[type='checkbox'] {
   gap: 8px;
   justify-content: flex-end;
   margin-top: 4px;
+  flex-wrap: wrap;
+}
+
+.bulkEditActions select {
+  min-width: 220px;
+  width: auto;
+  font-size: 12px;
+  padding: 6px 10px;
 }
 
 button.primary.small {
