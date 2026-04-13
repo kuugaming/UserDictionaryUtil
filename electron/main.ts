@@ -115,6 +115,9 @@ const DEFAULT_POS = '名詞';
 const CSV_HEADERS = ['reading', 'word', 'pos', 'note', 'enabledApple', 'enabledGoogle'];
 const MAX_BACKUP_HISTORY = 20;
 const pendingImports = new Map<string, PendingImport>();
+const SPLASH_MIN_SHOW_MS = 900;
+let mainWindow: BrowserWindow | null = null;
+let splashWindow: BrowserWindow | null = null;
 
 function normalizeReading(value: string): string {
   return value
@@ -313,12 +316,53 @@ function importSourceLabel(source: ImportSource) {
 }
 
 function createWindow() {
-  const win = new BrowserWindow({
+  const splashStartedAt = Date.now();
+
+  splashWindow = new BrowserWindow({
+    width: 520,
+    height: 320,
+    frame: false,
+    resizable: false,
+    movable: true,
+    show: true,
+    transparent: false,
+    alwaysOnTop: true,
+    backgroundColor: '#0b1220',
+    webPreferences: {
+      contextIsolation: true
+    }
+  });
+
+  splashWindow.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(`
+    <html>
+      <head>
+        <meta charset="utf-8" />
+        <style>
+          body { margin:0; font-family: system-ui, -apple-system, Segoe UI, sans-serif; background:#0b1220; color:#dbeafe; display:flex; align-items:center; justify-content:center; height:100vh; }
+          .card { text-align:center; padding:28px 24px; border-radius:18px; border:1px solid rgba(125,211,252,.25); background:linear-gradient(160deg, rgba(30,64,175,.35), rgba(76,29,149,.3)); box-shadow:0 16px 40px rgba(2,6,23,.45); }
+          h1 { margin:0 0 8px; font-size:22px; letter-spacing:.02em; }
+          p { margin:0; color:#bfdbfe; font-size:13px; }
+          .dot { margin:16px auto 0; width:10px; height:10px; border-radius:999px; background:#38bdf8; animation:pulse 1.2s infinite; }
+          @keyframes pulse { 0%{opacity:.35;transform:scale(.9);} 60%{opacity:1;transform:scale(1);} 100%{opacity:.35;transform:scale(.9);} }
+        </style>
+      </head>
+      <body>
+        <div class="card">
+          <h1>UserDictionaryUtil</h1>
+          <p>辞書ハブを起動しています...</p>
+          <div class="dot"></div>
+        </div>
+      </body>
+    </html>
+  `)}`);
+
+  mainWindow = new BrowserWindow({
     width: 1380,
     height: 920,
     minWidth: 1180,
     minHeight: 780,
     backgroundColor: '#0b1220',
+    show: false,
     webPreferences: {
       preload: path.join(app.getAppPath(), 'dist-electron', 'preload.js'),
       contextIsolation: true,
@@ -326,11 +370,27 @@ function createWindow() {
     }
   });
 
+  mainWindow.once('ready-to-show', () => {
+    const elapsed = Date.now() - splashStartedAt;
+    const remain = Math.max(0, SPLASH_MIN_SHOW_MS - elapsed);
+    setTimeout(() => {
+      if (splashWindow && !splashWindow.isDestroyed()) {
+        splashWindow.close();
+        splashWindow = null;
+      }
+      mainWindow?.show();
+    }, remain);
+  });
+
+  mainWindow.on('closed', () => {
+    mainWindow = null;
+  });
+
   if (!app.isPackaged) {
-    win.loadURL('http://127.0.0.1:5173');
-    win.webContents.openDevTools({ mode: 'detach' });
+    mainWindow.loadURL('http://127.0.0.1:5173');
+    mainWindow.webContents.openDevTools({ mode: 'detach' });
   } else {
-    win.loadFile(path.join(app.getAppPath(), 'dist', 'index.html'));
+    mainWindow.loadFile(path.join(app.getAppPath(), 'dist', 'index.html'));
   }
 }
 
