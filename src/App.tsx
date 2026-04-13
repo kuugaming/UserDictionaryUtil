@@ -726,8 +726,13 @@ function App() {
     setKeepDuplicateId(picked.id);
   }
 
-  function resolveActiveDuplicateGroup() {
+  function resolveActiveDuplicateGroup(continueNext = false) {
     if (!activeDuplicateGroup || !keepDuplicateId) return;
+
+    const nextGroup =
+      continueNext && activeDuplicateGroupIndex >= 0 && activeDuplicateGroupIndex < duplicateGroups.length - 1
+        ? duplicateGroups[activeDuplicateGroupIndex + 1]
+        : null;
 
     const removeIds = new Set(
       entries
@@ -736,7 +741,11 @@ function App() {
     );
 
     if (removeIds.size === 0) {
-      setActiveDuplicateGroup(null);
+      if (nextGroup) {
+        openDuplicateResolution(nextGroup);
+      } else {
+        setActiveDuplicateGroup(null);
+      }
       return;
     }
 
@@ -747,7 +756,11 @@ function App() {
     const message = `重複候補 ${activeDuplicateGroup.reading} → ${activeDuplicateGroup.word} を整理し、${removeIds.size} 件を外しました。保存で確定します。`;
     setStatus(message);
     pushActivity(message, 'warn');
-    setActiveDuplicateGroup(null);
+    if (nextGroup) {
+      openDuplicateResolution(nextGroup);
+    } else {
+      setActiveDuplicateGroup(null);
+    }
   }
 
   function focusDuplicateGroup(group: DuplicateGroup) {
@@ -1464,10 +1477,17 @@ function App() {
               <button className="ghost" onClick={() => setActiveDuplicateGroup(null)}>キャンセル</button>
               <button
                 className="primary"
-                onClick={resolveActiveDuplicateGroup}
+                onClick={() => resolveActiveDuplicateGroup(false)}
                 disabled={!keepDuplicateId}
               >
                 この1件を残して解決（{activeDuplicateEntries.length - 1} 件を除去）
+              </button>
+              <button
+                className="ghost"
+                onClick={() => resolveActiveDuplicateGroup(true)}
+                disabled={!keepDuplicateId || activeDuplicateGroupIndex < 0 || activeDuplicateGroupIndex >= duplicateGroups.length - 1}
+              >
+                解決して次の重複へ
               </button>
             </div>
           </section>

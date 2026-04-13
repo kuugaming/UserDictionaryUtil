@@ -226,7 +226,7 @@ This app prioritizes practical daily usability over features.
 
 ## Roadmap
 
-- [ ] 重複解決 UI のさらなる改善 / Further duplicate resolution UX improvements
+- [x] 重複解決 UI のさらなる改善 / Further duplicate resolution UX improvements
 - [x] 一括編集の拡張（フィルタ連動） / Extended bulk edit with filter integration
 - [x] バックアップ履歴の詳細比較 / Detailed snapshot diff view
 - [ ] 配布ビルドの整備・リリース / Packaging and release
