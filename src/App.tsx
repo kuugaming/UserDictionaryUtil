@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import type { BackupDiffReport, BackupSnapshotMeta, DictionaryEntry, ImportPreview, ImportSource } from './types';
+import type { AppMeta, BackupDiffReport, BackupSnapshotMeta, DictionaryEntry, ImportPreview, ImportSource } from './types';
 
 const DEFAULT_POS = '名詞';
 
@@ -12,7 +12,14 @@ type ActivityItem = {
 
 type SortMode = 'updated-desc' | 'reading-asc' | 'word-asc';
 type ViewMode = 'all' | 'apple' | 'google' | 'dual' | 'note' | 'duplicate';
-type BulkScope = 'selected' | 'visible';
+type BulkScope = 'selected' | 'visible' | 'preset';
+type FilterPreset = {
+  id: string;
+  name: string;
+  query: string;
+  viewMode: ViewMode;
+  sortMode: SortMode;
+};
 
 type DuplicateGroup = {
   key: string;
@@ -23,6 +30,7 @@ type DuplicateGroup = {
 };
 
 type BulkFlagMode = 'keep' | 'on' | 'off';
+const FILTER_PRESET_STORAGE_KEY = 'udu-filter-presets-v1';
 
 function formatTime(iso: string) {
   try {
@@ -88,6 +96,7 @@ function App() {
   const [viewMode, setViewMode] = useState<ViewMode>('all');
   const [status, setStatus] = useState('公開リポジトリ運用OK。辞書の中身だけは private 取り扱い推奨。');
   const [storagePath, setStoragePath] = useState('');
+  const [appMeta, setAppMeta] = useState<AppMeta | null>(null);
   const [activities, setActivities] = useState<ActivityItem[]>([
     makeActivity('UserDictionaryUtil を起動しました。', 'info')
   ]);
@@ -104,9 +113,11 @@ function App() {
   const [bulkNoteSuffix, setBulkNoteSuffix] = useState('');
   const [bulkAppleMode, setBulkAppleMode] = useState<BulkFlagMode>('keep');
   const [bulkGoogleMode, setBulkGoogleMode] = useState<BulkFlagMode>('keep');
+  const [bulkPresetId, setBulkPresetId] = useState('');
   const [activeDuplicateGroup, setActiveDuplicateGroup] = useState<DuplicateGroup | null>(null);
   const [keepDuplicateId, setKeepDuplicateId] = useState<string>('');
   const [confirmAction, setConfirmAction] = useState<{ label: string; detail: string; onConfirm: () => void } | null>(null);
+  const [filterPresets, setFilterPresets] = useState<FilterPreset[]>([]);
 
   async function refreshBackups() {
     const snapshotList = await window.udu.listBackups();
@@ -124,6 +135,7 @@ function App() {
   useEffect(() => {
     void refresh();
     window.udu.getStoragePath().then(setStoragePath).catch(() => undefined);
+    window.udu.getAppMeta().then(setAppMeta).catch(() => undefined);
   }, []);
 
   useEffect(() => {
@@ -147,6 +159,48 @@ function App() {
       }
     };
   }, [importPreview]);
+
+  useEffect(() => {
+    try {
+      const raw = window.localStorage.getItem(FILTER_PRESET_STORAGE_KEY);
+      if (!raw) return;
+      const parsed = JSON.parse(raw) as unknown;
+      if (!Array.isArray(parsed)) return;
+      const restored = parsed
+        .map((item) => {
+          if (!item || typeof item !== 'object') return null;
+          const candidate = item as Partial<FilterPreset>;
+          if (
+            typeof candidate.id !== 'string'
+            || typeof candidate.name !== 'string'
+            || typeof candidate.query !== 'string'
+            || typeof candidate.viewMode !== 'string'
+            || typeof candidate.sortMode !== 'string'
+          ) {
+            return null;
+          }
+          return {
+            id: candidate.id,
+            name: candidate.name,
+            query: candidate.query,
+            viewMode: candidate.viewMode as ViewMode,
+            sortMode: candidate.sortMode as SortMode
+          };
+        })
+        .filter((item): item is FilterPreset => item !== null);
+      setFilterPresets(restored.slice(0, 6));
+    } catch {
+      setFilterPresets([]);
+    }
+  }, []);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(FILTER_PRESET_STORAGE_KEY, JSON.stringify(filterPresets));
+    } catch {
+      // ignore
+    }
+  }, [filterPresets]);
 
   function pushActivity(label: string, tone: ActivityItem['tone']) {
     setActivities((prev) => [makeActivity(label, tone), ...prev].slice(0, 12));
@@ -266,6 +320,10 @@ function App() {
       .filter((entry) => dedupeKey(entry.reading, entry.word) === activeDuplicateGroup.key)
       .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt) || b.createdAt.localeCompare(a.createdAt));
   }, [entries, activeDuplicateGroup]);
+  const activeDuplicateGroupIndex = useMemo(() => {
+    if (!activeDuplicateGroup) return -1;
+    return duplicateGroups.findIndex((group) => group.key === activeDuplicateGroup.key);
+  }, [duplicateGroups, activeDuplicateGroup]);
 
   function clearDraft() {
     setReading('');
@@ -430,9 +488,15 @@ function App() {
   }
 
   function applyBulkToggle(scope: BulkScope, field: 'enabledApple' | 'enabledGoogle', nextValue: boolean) {
-    const targetIds = new Set(scope === 'selected' ? selectedIds : filtered.map((entry) => entry.id));
+    const targetIds = resolveBulkTargetIds(scope);
     if (targetIds.size === 0) {
-      setStatus(scope === 'selected' ? 'まず対象を選択してから一括操作して。' : '今表示されている行がありません。');
+      if (scope === 'selected') {
+        setStatus('まず対象を選択してから一括操作して。');
+      } else if (scope === 'preset') {
+        setStatus('プリセット対象が見つかりません。条件を見直してください。');
+      } else {
+        setStatus('今表示されている行がありません。');
+      }
       return;
     }
 
@@ -449,7 +513,7 @@ function App() {
     setEntries(changedEntries);
     setHasUnsavedChanges(true);
 
-    const scopeLabel = scope === 'selected' ? '選択中' : '表示中';
+    const scopeLabel = scope === 'selected' ? '選択中' : scope === 'visible' ? '表示中' : 'プリセット対象';
     const fieldLabel = field === 'enabledApple' ? 'Apple' : 'Google';
     const valueLabel = nextValue ? 'ON' : 'OFF';
     const message = `${scopeLabel} ${targetIds.size} 件の ${fieldLabel} を ${valueLabel} にしました。`;
@@ -554,12 +618,19 @@ function App() {
     setBulkNoteSuffix('');
     setBulkAppleMode('keep');
     setBulkGoogleMode('keep');
+    setBulkPresetId('');
   }
 
   function applyBulkEdit(scope: BulkScope) {
-    const targetIds = new Set(scope === 'selected' ? selectedIds : filtered.map((entry) => entry.id));
+    const targetIds = resolveBulkTargetIds(scope);
     if (targetIds.size === 0) {
-      setStatus(scope === 'selected' ? '一括編集するには対象を選択して。' : '一括編集する表示行がありません。');
+      if (scope === 'selected') {
+        setStatus('一括編集するには対象を選択して。');
+      } else if (scope === 'preset') {
+        setStatus('一括編集するプリセット対象が見つかりません。');
+      } else {
+        setStatus('一括編集する表示行がありません。');
+      }
       return;
     }
 
@@ -589,10 +660,43 @@ function App() {
 
     setEntries(nextEntries);
     setHasUnsavedChanges(true);
-    const scopeLabel = scope === 'selected' ? '選択中' : '表示中';
+    const scopeLabel = scope === 'selected' ? '選択中' : scope === 'visible' ? '表示中' : 'プリセット対象';
     const message = `${scopeLabel} ${targetIds.size} 件へ一括編集を適用しました。保存で確定します。`;
     setStatus(message);
     pushActivity(message, 'info');
+  }
+
+  function resolveBulkTargetIds(scope: BulkScope) {
+    if (scope === 'selected') {
+      return new Set(selectedIds);
+    }
+    if (scope === 'visible') {
+      return new Set(filtered.map((entry) => entry.id));
+    }
+    const preset = filterPresets.find((item) => item.id === bulkPresetId);
+    if (!preset) return new Set<string>();
+    const normalizedQuery = preset.query.trim().toLowerCase();
+    const matched = entries.filter((entry) => {
+      const matchesQuery =
+        !normalizedQuery
+        || [entry.reading, entry.word, entry.pos, entry.note].some((value) => value.toLowerCase().includes(normalizedQuery));
+      if (!matchesQuery) return false;
+      switch (preset.viewMode) {
+        case 'apple':
+          return entry.enabledApple;
+        case 'google':
+          return entry.enabledGoogle;
+        case 'dual':
+          return entry.enabledApple && entry.enabledGoogle;
+        case 'note':
+          return entry.note.trim().length > 0;
+        case 'duplicate':
+          return duplicateIdSet.has(entry.id);
+        default:
+          return true;
+      }
+    });
+    return new Set(matched.map((entry) => entry.id));
   }
 
   function openDuplicateResolution(group: DuplicateGroup) {
@@ -601,8 +705,36 @@ function App() {
     setKeepDuplicateId(sortedGroup[0]?.id ?? '');
   }
 
-  function resolveActiveDuplicateGroup() {
+  function jumpDuplicateGroup(offset: number) {
+    if (!activeDuplicateGroup || activeDuplicateGroupIndex < 0) return;
+    const nextIndex = activeDuplicateGroupIndex + offset;
+    if (nextIndex < 0 || nextIndex >= duplicateGroups.length) return;
+    const nextGroup = duplicateGroups[nextIndex];
+    if (!nextGroup) return;
+    openDuplicateResolution(nextGroup);
+  }
+
+  function pickDuplicateResolution(mode: 'latest' | 'oldest' | 'apple-on' | 'google-on') {
+    if (activeDuplicateEntries.length === 0) return;
+    let picked = activeDuplicateEntries[0];
+    if (mode === 'oldest') {
+      picked = [...activeDuplicateEntries]
+        .sort((a, b) => a.updatedAt.localeCompare(b.updatedAt) || a.createdAt.localeCompare(b.createdAt))[0];
+    } else if (mode === 'apple-on') {
+      picked = activeDuplicateEntries.find((entry) => entry.enabledApple) ?? activeDuplicateEntries[0];
+    } else if (mode === 'google-on') {
+      picked = activeDuplicateEntries.find((entry) => entry.enabledGoogle) ?? activeDuplicateEntries[0];
+    }
+    setKeepDuplicateId(picked.id);
+  }
+
+  function resolveActiveDuplicateGroup(continueNext = false) {
     if (!activeDuplicateGroup || !keepDuplicateId) return;
+
+    const nextGroup =
+      continueNext && activeDuplicateGroupIndex >= 0 && activeDuplicateGroupIndex < duplicateGroups.length - 1
+        ? duplicateGroups[activeDuplicateGroupIndex + 1]
+        : null;
 
     const removeIds = new Set(
       entries
@@ -611,7 +743,11 @@ function App() {
     );
 
     if (removeIds.size === 0) {
-      setActiveDuplicateGroup(null);
+      if (nextGroup) {
+        openDuplicateResolution(nextGroup);
+      } else {
+        setActiveDuplicateGroup(null);
+      }
       return;
     }
 
@@ -622,13 +758,52 @@ function App() {
     const message = `重複候補 ${activeDuplicateGroup.reading} → ${activeDuplicateGroup.word} を整理し、${removeIds.size} 件を外しました。保存で確定します。`;
     setStatus(message);
     pushActivity(message, 'warn');
-    setActiveDuplicateGroup(null);
+    if (nextGroup) {
+      openDuplicateResolution(nextGroup);
+    } else {
+      setActiveDuplicateGroup(null);
+    }
   }
 
   function focusDuplicateGroup(group: DuplicateGroup) {
     setQuery(group.reading);
     setViewMode('duplicate');
     setStatus(`重複候補: ${group.reading} → ${group.word} を絞り込みました。`);
+  }
+
+  function saveCurrentFilterPreset() {
+    const trimmedQuery = query.trim();
+    const presetName = window.prompt('プリセット名を入力してください（例: 重複チェック / Apple確認）');
+    if (!presetName) return;
+    const trimmedName = presetName.trim();
+    if (!trimmedName) {
+      setStatus('プリセット名が空のため保存をスキップしました。');
+      return;
+    }
+
+    const nextPreset: FilterPreset = {
+      id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      name: trimmedName,
+      query: trimmedQuery,
+      viewMode,
+      sortMode
+    };
+    setFilterPresets((prev) => [nextPreset, ...prev].slice(0, 6));
+    setStatus(`フィルタプリセット「${trimmedName}」を保存しました。`);
+    pushActivity(`フィルタプリセット保存: ${trimmedName}`, 'success');
+  }
+
+  function applyFilterPreset(preset: FilterPreset) {
+    setQuery(preset.query);
+    setViewMode(preset.viewMode);
+    setSortMode(preset.sortMode);
+    setStatus(`フィルタプリセット「${preset.name}」を適用しました。`);
+    pushActivity(`フィルタプリセット適用: ${preset.name}`, 'info');
+  }
+
+  function removeFilterPreset(presetId: string) {
+    setFilterPresets((prev) => prev.filter((preset) => preset.id !== presetId));
+    setStatus('フィルタプリセットを削除しました。');
   }
 
   const filterItems: Array<{ key: ViewMode; label: string; count: number }> = [
@@ -703,6 +878,8 @@ function App() {
           <div className="sidebarSection compact">
             <span className="sectionLabel">Storage</span>
             <p className="pathText">{storagePath || '取得中...'}</p>
+            <p className="pathText">App v{appMeta?.appVersion ?? '...'} / Electron {appMeta?.electronVersion ?? '...'}</p>
+            <p className="pathText">Node {appMeta?.nodeVersion ?? '...'} / {appMeta?.platform ?? '...'}</p>
           </div>
         </aside>
 
@@ -878,8 +1055,15 @@ function App() {
                   </div>
                 </div>
                 <div className="bulkEditActions">
+                  <select value={bulkPresetId} onChange={(e) => setBulkPresetId(e.target.value)} disabled={filterPresets.length === 0}>
+                    <option value="">プリセット対象を選択（任意）</option>
+                    {filterPresets.map((preset) => (
+                      <option key={preset.id} value={preset.id}>{preset.name}</option>
+                    ))}
+                  </select>
                   <button className="ghost small" onClick={clearBulkEditDraft}>リセット</button>
                   <button className="ghost small" onClick={() => applyBulkEdit('visible')}>表示中に適用</button>
+                  <button className="ghost small" onClick={() => applyBulkEdit('preset')} disabled={!bulkPresetId}>プリセット対象に適用</button>
                   <button className="primary small" onClick={() => applyBulkEdit('selected')} disabled={stats.selected === 0}>選択中に適用</button>
                 </div>
               </div>
@@ -1015,6 +1199,7 @@ function App() {
                   <option value="reading-asc">読み順</option>
                   <option value="word-asc">単語順</option>
                 </select>
+                <button className="ghost" onClick={saveCurrentFilterPreset}>条件を保存</button>
                 <button className="ghost" onClick={() => { setQuery(''); setViewMode('all'); }}>絞り込み解除</button>
                 <button className="danger" onClick={() => void removeSelected()} disabled={selectedIds.length === 0}>選択削除</button>
               </div>
@@ -1039,6 +1224,19 @@ function App() {
               <span>{latestActivity ? `最終操作 ${formatTime(latestActivity.timestamp)}` : 'まだ操作なし'}</span>
               {stats.duplicateGroups > 0 && <span className="warningText">保存前の重複候補 {stats.duplicateGroups} 組</span>}
             </div>
+
+            {filterPresets.length > 0 && (
+              <div className="presetRow">
+                {filterPresets.map((preset) => (
+                  <div key={preset.id} className="presetChip">
+                    <button className="ghost small" onClick={() => applyFilterPreset(preset)}>
+                      {preset.name}
+                    </button>
+                    <button className="danger subtle" onClick={() => removeFilterPreset(preset.id)}>×</button>
+                  </div>
+                ))}
+              </div>
+            )}
 
             <div className="tableWrap">
               <table>
@@ -1235,6 +1433,20 @@ function App() {
               <button className="ghost" onClick={() => setActiveDuplicateGroup(null)}>閉じる</button>
             </div>
 
+            <div className="resolutionToolbar">
+              <div className="resolutionNav">
+                <button className="ghost small" onClick={() => jumpDuplicateGroup(-1)} disabled={activeDuplicateGroupIndex <= 0}>← 前の重複</button>
+                <span>{activeDuplicateGroupIndex + 1} / {duplicateGroups.length} グループ</span>
+                <button className="ghost small" onClick={() => jumpDuplicateGroup(1)} disabled={activeDuplicateGroupIndex < 0 || activeDuplicateGroupIndex >= duplicateGroups.length - 1}>次の重複 →</button>
+              </div>
+              <div className="resolutionPresets">
+                <button className="ghost small" onClick={() => pickDuplicateResolution('latest')}>最新更新を残す</button>
+                <button className="ghost small" onClick={() => pickDuplicateResolution('oldest')}>最古更新を残す</button>
+                <button className="ghost small" onClick={() => pickDuplicateResolution('apple-on')}>Apple ON優先</button>
+                <button className="ghost small" onClick={() => pickDuplicateResolution('google-on')}>Google ON優先</button>
+              </div>
+            </div>
+
             <div className="duplicateResolutionList">
               {activeDuplicateEntries.map((entry, index) => (
                 <label
@@ -1269,10 +1481,17 @@ function App() {
               <button className="ghost" onClick={() => setActiveDuplicateGroup(null)}>キャンセル</button>
               <button
                 className="primary"
-                onClick={resolveActiveDuplicateGroup}
+                onClick={() => resolveActiveDuplicateGroup(false)}
                 disabled={!keepDuplicateId}
               >
                 この1件を残して解決（{activeDuplicateEntries.length - 1} 件を除去）
+              </button>
+              <button
+                className="ghost"
+                onClick={() => resolveActiveDuplicateGroup(true)}
+                disabled={!keepDuplicateId || activeDuplicateGroupIndex < 0 || activeDuplicateGroupIndex >= duplicateGroups.length - 1}
+              >
+                解決して次の重複へ
               </button>
             </div>
           </section>

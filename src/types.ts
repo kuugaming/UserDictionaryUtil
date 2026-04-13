@@ -86,6 +86,13 @@ export type BackupDiffReport = {
   };
 };
 
+export type AppMeta = {
+  appVersion: string;
+  electronVersion: string;
+  nodeVersion: string;
+  platform: string;
+};
+
 declare global {
   interface Window {
     udu: {
@@ -106,6 +113,7 @@ declare global {
       restoreBackup: (snapshotId: string) => Promise<DictionaryEntry[] | null>;
       diffBackup: (snapshotId: string) => Promise<BackupDiffReport | null>;
       getStoragePath: () => Promise<string>;
+      getAppMeta: () => Promise<AppMeta>;
     };
   }
 }
